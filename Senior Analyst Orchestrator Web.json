@@ -1,0 +1,301 @@
+{
+  "name": "Senior Analyst Orchestrator Web",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "NQ3yHScKw6ShZ0jt",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/NQ3yHScKw6ShZ0jt",
+          "cachedResultName": "RSS Stock News Collector + Filing Content Preparation"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -48,
+        0
+      ],
+      "id": "3b0290bb-79d7-45a7-a004-194048ccea7e",
+      "name": "Run SEC Financial Analysis"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "ZL1aFaKdjuIKdCjR",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/ZL1aFaKdjuIKdCjR",
+          "cachedResultName": "Marketaux and Finnhub News Collector"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -64,
+        192
+      ],
+      "id": "b59e9ac8-56f9-4d4f-8b9f-981cddecaca1",
+      "name": "Run Market News Collection"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        288,
+        144
+      ],
+      "id": "4c034466-cec4-4d63-aa81-36358a0ed5f3",
+      "name": "Merge Analyst and News"
+    },
+    {
+      "parameters": {
+        "jsCode": "const merged = $input.first().json;\n\nconst ticker = String(\n  merged.ticker || ''\n)\n  .trim()\n  .toUpperCase();\n\nif (!ticker) {\n  throw new Error(\n    'Ticker is missing from Merge Analyst and News'\n  );\n}\n\nconst companyName = String(\n  merged.company_name || ticker\n).trim();\n\nlet initialAnalysis =\n  merged.initial_analysis || null;\n\n// הגנה למקרה שפלט הסוכן עדיין עטוף בתוך output\nif (\n  initialAnalysis &&\n  initialAnalysis.output\n) {\n  initialAnalysis = initialAnalysis.output;\n}\n\nif (!initialAnalysis) {\n  throw new Error(\n    'Initial analyst result is missing'\n  );\n}\n\nconst newsArticles = Array.isArray(\n  merged.news_articles\n)\n  ? merged.news_articles\n  : [];\n\nconst formattedNews = newsArticles.map(\n  (article, index) => {\n    const summary =\n      article.summary ||\n      article.description ||\n      article.snippet ||\n      'No summary available';\n\n    return `\n===== NEWS ARTICLE ${index + 1} =====\nTitle: ${article.title || 'Unknown'}\nProvider: ${article.news_provider || 'Unknown'}\nSource: ${article.source || 'Unknown'}\nPublished: ${article.published || 'Unknown'}\nSummary: ${summary}\nURL: ${article.link || 'Unknown'}\n===== END NEWS ARTICLE ${index + 1} =====\n`.trim();\n  }\n);\n\nconst seniorAnalystInput = `\nYou are a senior financial analyst reviewing the conclusion of an initial financial analyst.\n\nCOMPANY INFORMATION\nTicker: ${ticker}\nCompany name: ${companyName}\n\nOFFICIAL SEC ANALYSIS\nNumber of SEC filings analyzed:\n${merged.sec_document_count || 0}\n\nInitial analyst result:\n${JSON.stringify(initialAnalysis, null, 2)}\n\nRECENT FINANCIAL NEWS\nNumber of news articles:\n${newsArticles.length}\n\n${formattedNews.length\n  ? formattedNews.join('\\n\\n')\n  : 'No relevant recent financial news articles were found.'}\n\nREVIEW TASK\n\n1. Review whether the initial analyst's sentiment is justified.\n2. Compare the SEC-based analysis with the recent financial news.\n3. Identify material information the initial analyst may have missed.\n4. Identify contradictions between the SEC analysis and the news.\n5. Give greater weight to official SEC filings than to secondary news reports.\n6. Distinguish company-specific news from articles that only mention Microsoft products or platforms.\n7. Give less weight to opinion pieces, promotional headlines and weakly relevant articles.\n8. Consider recency, relevance and financial materiality.\n9. Decide whether the initial sentiment should be confirmed, strengthened, weakened or changed.\n10. Return a final sentiment using exactly one label:\n   - Strong Positive\n   - Positive\n   - Neutral\n   - Negative\n   - Strong Negative\n11. Do not provide buy, sell or hold advice.\n12. Return only valid structured JSON.\n`.trim();\n\nreturn [\n  {\n    json: {\n      ticker,\n      company_name: companyName,\n\n      sec_document_count:\n        merged.sec_document_count || 0,\n\n      news_article_count:\n        newsArticles.length,\n\n      initial_analysis:\n        initialAnalysis,\n\n      news_articles:\n        newsArticles,\n\n      senior_analyst_input:\n        seniorAnalystInput,\n\n      senior_analyst_input_characters:\n        seniorAnalystInput.length\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        496,
+        144
+      ],
+      "id": "01bac540-b1f7-42cc-a462-f7291f621ae9",
+      "name": "Build Senior Analyst Input"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "6GtLBTPr3Oy2ME8f",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/6GtLBTPr3Oy2ME8f",
+          "cachedResultName": "Senior Financial Analyst Agent"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        704,
+        144
+      ],
+      "id": "24dc8448-59f1-4adc-9b99-8389132fdb6e",
+      "name": "Run Senior Financial Analyst",
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "financial-analysis-result",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -592,
+        192
+      ],
+      "id": "2fe861ed-183e-4583-b039-86c4729b8dd9",
+      "name": "Receive Ticker Submission",
+      "webhookId": "f13c9ca7-219e-48e4-ac25-81c86ffc64e3"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body ?? $json;\n\nconst ticker = String(\n  body.ticker ??\n  body.ticker_input ??\n  ''\n)\n  .trim()\n  .toUpperCase();\n\nif (!ticker) {\n  throw new Error('Ticker is missing');\n}\n\nif (!/^[A-Z0-9.-]{1,10}$/.test(ticker)) {\n  throw new Error('Ticker format is invalid');\n}\n\nreturn [\n  {\n    json: {\n      ticker\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -368,
+        192
+      ],
+      "id": "1da10fda-3886-4f37-9264-e67789204570",
+      "name": "Extract Ticker"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.html }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1088,
+        144
+      ],
+      "id": "969ef205-772b-48d8-8cc2-b261238ade5a",
+      "name": "Respond to Webhook1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $json.output ?? $json;\n\nfunction escapeHtml(value) {\n  return String(value ?? '')\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;')\n    .replace(/'/g, '&#039;');\n}\n\nfunction list(items) {\n  if (!Array.isArray(items) || items.length === 0) {\n    return '<p class=\"empty\">No findings reported.</p>';\n  }\n\n  return `\n    <ul>\n      ${items.map(item => `<li>${escapeHtml(item)}</li>`).join('')}\n    </ul>\n  `;\n}\n\nconst sentiment = String(result.final_sentiment || 'Neutral');\n\nconst sentimentClass = {\n  'Strong Positive': 'strong-positive',\n  'Positive': 'positive',\n  'Neutral': 'neutral',\n  'Negative': 'negative',\n  'Strong Negative': 'strong-negative'\n}[sentiment] || 'neutral';\n\nconst agreementText =\n  result.agreement_with_initial_analyst\n    ? 'Yes'\n    : 'No';\n\nconst html = `\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n  <title>Financial Sentiment Report</title>\n\n  <style>\n    * {\n      box-sizing: border-box;\n    }\n\n    body {\n      margin: 0;\n      padding: 40px 20px;\n      font-family: Arial, sans-serif;\n      color: #172033;\n      background:\n        radial-gradient(circle at top left, #dbeafe 0, transparent 30%),\n        radial-gradient(circle at bottom right, #ede9fe 0, transparent 30%),\n        #f5f7fb;\n    }\n\n    .container {\n      width: 100%;\n      max-width: 1150px;\n      margin: 0 auto;\n    }\n\n    .hero {\n      margin-bottom: 28px;\n      text-align: center;\n    }\n\n    .eyebrow {\n      margin-bottom: 10px;\n      color: #4f46e5;\n      font-size: 13px;\n      font-weight: 700;\n      letter-spacing: 2px;\n      text-transform: uppercase;\n    }\n\n    h1 {\n      margin: 0 0 12px;\n      font-size: 44px;\n    }\n\n    .subtitle {\n      margin: 0;\n      color: #64748b;\n      font-size: 17px;\n    }\n\n    .summary-grid {\n      display: grid;\n      grid-template-columns: repeat(5, 1fr);\n      gap: 14px;\n      margin-bottom: 24px;\n    }\n\n    .summary-card,\n    .card {\n      border: 1px solid rgba(148, 163, 184, 0.25);\n      border-radius: 20px;\n      background: rgba(255, 255, 255, 0.94);\n      box-shadow: 0 14px 40px rgba(30, 41, 59, 0.09);\n    }\n\n    .summary-card {\n      padding: 20px;\n      text-align: center;\n    }\n\n    .summary-label {\n      margin-bottom: 8px;\n      color: #64748b;\n      font-size: 12px;\n      font-weight: 700;\n      letter-spacing: 1px;\n      text-transform: uppercase;\n    }\n\n    .summary-value {\n      font-size: 20px;\n      font-weight: 800;\n    }\n\n    .sentiment {\n      display: inline-block;\n      padding: 8px 14px;\n      border-radius: 999px;\n      font-size: 16px;\n      font-weight: 800;\n    }\n\n    .strong-positive {\n      color: #166534;\n      background: #dcfce7;\n    }\n\n    .positive {\n      color: #15803d;\n      background: #ecfdf5;\n    }\n\n    .neutral {\n      color: #92400e;\n      background: #fef3c7;\n    }\n\n    .negative {\n      color: #b91c1c;\n      background: #fee2e2;\n    }\n\n    .strong-negative {\n      color: #7f1d1d;\n      background: #fecaca;\n    }\n\n    .content-grid {\n      display: grid;\n      grid-template-columns: 1fr 1fr;\n      gap: 20px;\n    }\n\n    .card {\n      padding: 24px;\n    }\n\n    .card.full {\n      grid-column: 1 / -1;\n    }\n\n    .card h2 {\n      margin: 0 0 16px;\n      color: #1e293b;\n      font-size: 21px;\n    }\n\n    ul {\n      margin: 0;\n      padding-left: 20px;\n    }\n\n    li {\n      margin-bottom: 11px;\n      color: #475569;\n      line-height: 1.65;\n    }\n\n    .explanation {\n      color: #334155;\n      font-size: 16px;\n      line-height: 1.8;\n    }\n\n    .disclaimer {\n      margin-top: 24px;\n      padding: 18px;\n      border-radius: 14px;\n      color: #64748b;\n      background: rgba(255, 255, 255, 0.7);\n      font-size: 13px;\n      text-align: center;\n    }\n\n    .back-link {\n      display: inline-block;\n      margin-top: 24px;\n      padding: 12px 18px;\n      border-radius: 12px;\n      color: white;\n      background: linear-gradient(135deg, #4f46e5, #7c3aed);\n      text-decoration: none;\n      font-weight: 700;\n    }\n\n    .empty {\n      color: #94a3b8;\n    }\n\n    @media (max-width: 900px) {\n      .summary-grid {\n        grid-template-columns: repeat(2, 1fr);\n      }\n\n      .content-grid {\n        grid-template-columns: 1fr;\n      }\n\n      .card.full {\n        grid-column: auto;\n      }\n    }\n\n    @media (max-width: 520px) {\n      h1 {\n        font-size: 32px;\n      }\n\n      .summary-grid {\n        grid-template-columns: 1fr;\n      }\n    }\n  </style>\n</head>\n\n<body>\n  <main class=\"container\">\n    <header class=\"hero\">\n      <div class=\"eyebrow\">Multi-Agent Financial Intelligence</div>\n      <h1>Financial Sentiment Report</h1>\n      <p class=\"subtitle\">\n        Automated analysis of official SEC filings and recent financial news\n      </p>\n    </header>\n\n    <section class=\"summary-grid\">\n      <div class=\"summary-card\">\n        <div class=\"summary-label\">Ticker</div>\n        <div class=\"summary-value\">${escapeHtml(result.ticker)}</div>\n      </div>\n\n      <div class=\"summary-card\">\n        <div class=\"summary-label\">Initial Sentiment</div>\n        <div class=\"summary-value\">\n          ${escapeHtml(result.initial_sentiment)}\n        </div>\n      </div>\n\n      <div class=\"summary-card\">\n        <div class=\"summary-label\">Final Sentiment</div>\n        <div class=\"sentiment ${sentimentClass}\">\n          ${escapeHtml(result.final_sentiment)}\n        </div>\n      </div>\n\n      <div class=\"summary-card\">\n        <div class=\"summary-label\">Confidence</div>\n        <div class=\"summary-value\">${escapeHtml(result.confidence)}</div>\n      </div>\n\n      <div class=\"summary-card\">\n        <div class=\"summary-label\">Review Decision</div>\n        <div class=\"summary-value\">${escapeHtml(result.review_decision)}</div>\n      </div>\n    </section>\n\n    <section class=\"content-grid\">\n      <article class=\"card\">\n        <h2>Important SEC Findings</h2>\n        ${list(result.important_sec_findings)}\n      </article>\n\n      <article class=\"card\">\n        <h2>Important News Findings</h2>\n        ${list(result.important_news_findings)}\n      </article>\n\n      <article class=\"card\">\n        <h2>Main Reasons</h2>\n        ${list(result.main_reasons)}\n      </article>\n\n      <article class=\"card\">\n        <h2>Risk Factors</h2>\n        ${list(result.risk_factors)}\n      </article>\n\n      <article class=\"card\">\n        <h2>Contradictions</h2>\n        ${list(result.contradictions)}\n      </article>\n\n      <article class=\"card\">\n        <h2>Corrections to Initial Analysis</h2>\n        ${list(result.corrections_to_initial_analysis)}\n      </article>\n\n      <article class=\"card full\">\n        <h2>Final Explanation</h2>\n        <div class=\"explanation\">\n          ${escapeHtml(result.final_explanation)}\n        </div>\n      </article>\n    </section>\n\n    <div class=\"disclaimer\">\n      Agreement with initial analyst: ${agreementText}<br><br>\n      ${escapeHtml(result.disclaimer)}\n    </div>\n\n    <div style=\"text-align:center;\">\n      <a\n        class=\"back-link\"\n        href=\"http://localhost:5678/webhook/financial-analysis\"\n      >\n        Analyze Another Stock\n      </a>\n    </div>\n  </main>\n</body>\n</html>\n`;\n\nreturn [\n  {\n    json: {\n      html\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        912,
+        144
+      ],
+      "id": "6a0da7e5-2730-437e-8883-67fc99d7eba6",
+      "name": "Build HTML Report"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Run Market News Collection": {
+      "main": [
+        [
+          {
+            "node": "Merge Analyst and News",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Run SEC Financial Analysis": {
+      "main": [
+        [
+          {
+            "node": "Merge Analyst and News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Analyst and News": {
+      "main": [
+        [
+          {
+            "node": "Build Senior Analyst Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Senior Analyst Input": {
+      "main": [
+        [
+          {
+            "node": "Run Senior Financial Analyst",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Senior Financial Analyst": {
+      "main": [
+        [
+          {
+            "node": "Build HTML Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Receive Ticker Submission": {
+      "main": [
+        [
+          {
+            "node": "Extract Ticker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Ticker": {
+      "main": [
+        [
+          {
+            "node": "Run SEC Financial Analysis",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Run Market News Collection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build HTML Report": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "3e9f4885-42bb-4eef-ab6f-aa3f243b1510",
+  "meta": {
+    "instanceId": "9ab1c320b82bc33b8fae8fcfcd3f9b34ecbc8e31930926afa7a2964d5374d7dd"
+  },
+  "id": "6eICaKz9OnjoKJwg",
+  "tags": []
+}

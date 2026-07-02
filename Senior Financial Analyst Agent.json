@@ -1,0 +1,116 @@
+{
+  "name": "Senior Financial Analyst Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "ceaba3ae-f182-4d43-90ee-e157f79ea2aa",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.senior_analyst_input || 'No senior analyst input was received.' }}",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        208,
+        0
+      ],
+      "id": "90d66623-69b9-4364-8e3b-92b2115baf43",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        80,
+        208
+      ],
+      "id": "9647113e-7d00-41a2-a710-51ff854f2c12",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "43NWnsv4sZF8uqtE",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"ticker\": {\n      \"type\": \"string\"\n    },\n    \"initial_sentiment\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"Strong Positive\",\n        \"Positive\",\n        \"Neutral\",\n        \"Negative\",\n        \"Strong Negative\"\n      ]\n    },\n    \"final_sentiment\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"Strong Positive\",\n        \"Positive\",\n        \"Neutral\",\n        \"Negative\",\n        \"Strong Negative\"\n      ]\n    },\n    \"confidence\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"High\",\n        \"Medium\",\n        \"Low\"\n      ]\n    },\n    \"agreement_with_initial_analyst\": {\n      \"type\": \"boolean\"\n    },\n    \"review_decision\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"Confirmed\",\n        \"Strengthened\",\n        \"Weakened\",\n        \"Changed\"\n      ]\n    },\n    \"important_sec_findings\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    },\n    \"important_news_findings\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    },\n    \"contradictions\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    },\n    \"corrections_to_initial_analysis\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    },\n    \"main_reasons\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    },\n    \"risk_factors\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    },\n    \"final_explanation\": {\n      \"type\": \"string\"\n    },\n    \"disclaimer\": {\n      \"type\": \"string\"\n    }\n  },\n  \"required\": [\n    \"ticker\",\n    \"initial_sentiment\",\n    \"final_sentiment\",\n    \"confidence\",\n    \"agreement_with_initial_analyst\",\n    \"review_decision\",\n    \"important_sec_findings\",\n    \"important_news_findings\",\n    \"contradictions\",\n    \"corrections_to_initial_analysis\",\n    \"main_reasons\",\n    \"risk_factors\",\n    \"final_explanation\",\n    \"disclaimer\"\n  ]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        384,
+        208
+      ],
+      "id": "8a39f496-00eb-4021-97c7-3bae0496392f",
+      "name": "Structured Output Parser"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "f6c36761-42e6-4b50-93d2-ba66973b1721",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9ab1c320b82bc33b8fae8fcfcd3f9b34ecbc8e31930926afa7a2964d5374d7dd"
+  },
+  "id": "6GtLBTPr3Oy2ME8f",
+  "tags": []
+}

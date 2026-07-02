@@ -1,0 +1,689 @@
+{
+  "name": "RSS Stock News Collector + Filing Content Preparation",
+  "nodes": [
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d719035a-0ac6-4f9a-b3c3-06c29e81a257",
+              "name": "ticker",
+              "value": "MSFT",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -208,
+        -208
+      ],
+      "id": "605670a2-87b6-4d85-83d6-f811d5ec4b78",
+      "name": "Input Ticker"
+    },
+    {
+      "parameters": {
+        "jsCode": "const ticker = String($input.first().json.ticker || '')\n  .trim()\n  .toUpperCase();\n\nif (!ticker) {\n  throw new Error('Ticker is missing');\n}\n\n// מילון בסיסי עבור ה-MVP\nconst companies = {\n  AAPL: {\n    companyName: 'Apple',\n    aliases: ['Apple', 'Apple Inc', 'AAPL']\n  },\n  TSLA: {\n    companyName: 'Tesla',\n    aliases: ['Tesla', 'Tesla Inc', 'TSLA']\n  },\n  NVDA: {\n    companyName: 'Nvidia',\n    aliases: ['Nvidia', 'NVIDIA Corporation', 'NVDA']\n  },\n  MSFT: {\n    companyName: 'Microsoft',\n    aliases: ['Microsoft', 'Microsoft Corporation', 'MSFT']\n  },\n  AMZN: {\n    companyName: 'Amazon',\n    aliases: ['Amazon', 'Amazon.com', 'AMZN']\n  },\n  GOOGL: {\n    companyName: 'Alphabet',\n    aliases: ['Google', 'Alphabet', 'Alphabet Inc', 'GOOGL']\n  },\n  META: {\n    companyName: 'Meta',\n    aliases: ['Meta', 'Meta Platforms', 'Facebook', 'META']\n  }\n};\n\nconst company = companies[ticker] || {\n  companyName: ticker,\n  aliases: [ticker]\n};\n\nreturn [\n  {\n    json: {\n      ticker,\n      companyName: company.companyName,\n      aliases: company.aliases\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        0
+      ],
+      "id": "240634c9-b35d-4a40-b550-197632985fe4",
+      "name": "Prepare Company Search"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\n\nconst ticker = String(input.ticker || '')\n  .trim()\n  .toUpperCase();\n\nif (!ticker) {\n  throw new Error('Ticker is missing');\n}\n\nconst baseUrl = 'https://www.sec.gov/cgi-bin/browse-edgar';\n\nconst filingTypes = [\n  {\n    filingType: '8-K',\n    source: 'SEC EDGAR - 8-K Filings'\n  },\n  {\n    filingType: '10-Q',\n    source: 'SEC EDGAR - 10-Q Filings'\n  },\n  {\n    filingType: '10-K',\n    source: 'SEC EDGAR - 10-K Filings'\n  }\n];\n\nreturn filingTypes.map(feed => {\n  const feedUrl =\n    `${baseUrl}` +\n    `?action=getcompany` +\n    `&CIK=${encodeURIComponent(ticker)}` +\n    `&type=${encodeURIComponent(feed.filingType)}` +\n    `&owner=exclude` +\n    `&count=40` +\n    `&output=atom`;\n\n  return {\n    json: {\n      ticker: ticker,\n      companyName: input.companyName || ticker,\n      aliases: input.aliases || [ticker],\n      filingType: feed.filingType,\n      source: feed.source,\n      feedUrl: feedUrl\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        0
+      ],
+      "id": "b4eee24b-fbc6-40a5-847f-e29e0c399019",
+      "name": "Create RSS Feed List"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1040,
+        0
+      ],
+      "id": "458a8d36-46e8-45f3-b543-483f46ad7e3b",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "737fe76d-bed4-4e69-9953-65b250204d11",
+              "name": "title",
+              "value": "={{ $json.title || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "00163fcc-8250-49b3-a4be-e9c392fd10f8",
+              "name": "summary",
+              "value": "={{ $json.summary?._ || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "fc5d9889-2e55-4f0f-af2c-cc36af8760fe",
+              "name": "link",
+              "value": "={{ $json.link?.href || $json.content?.['filing-href'] || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "1e86825f-7b1f-42da-97f9-877031b9223f",
+              "name": "published",
+              "value": "={{ $json.updated || $json.content?.['filing-date'] || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "82055fc8-8321-42be-9bbf-aa7d00408688",
+              "name": "filingType",
+              "value": "={{ $json.category?.term || $json.content?.['filing-type'] || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "75e3dd39-3759-458b-9b72-981384aaf96d",
+              "name": "formName",
+              "value": "={{ $json.content?.['form-name'] || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "f80d7498-c1bf-40bb-8f78-68fdeebee3c8",
+              "name": "itemsDescription",
+              "value": "={{ $json.content?.['items-desc'] || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "ad0b7298-ef49-4333-a662-b5e4b190b780",
+              "name": "accessionNumber",
+              "value": "={{ $json.content?.['accession-number'] || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "4317a968-762d-470e-be9e-01a7f5e5d854",
+              "name": "source",
+              "value": "={{ $('Loop Over Items').item.json.source }}",
+              "type": "string"
+            },
+            {
+              "id": "1fdb2cf7-d173-40f3-bb2c-103c4e3061e2",
+              "name": "ticker",
+              "value": "={{ $('Loop Over Items').item.json.ticker }}",
+              "type": "string"
+            },
+            {
+              "id": "6c83800f-e0fd-497b-8d96-59ac0fffc25d",
+              "name": "companyName",
+              "value": "={{ $('Loop Over Items').item.json.companyName }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1872,
+        0
+      ],
+      "id": "746179de-d89e-45db-8160-9a5a4660ad67",
+      "name": "Normalize SEC Filing"
+    },
+    {
+      "parameters": {
+        "compare": "selectedFields",
+        "fieldsToCompare": "link",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        1264,
+        -176
+      ],
+      "id": "67fb6aee-20c1-4fb8-9e98-cd83aef47804",
+      "name": "Remove Duplicates"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.feedUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "BGU AlgoTrade Project leech@post.bgu.ac.il"
+            },
+            {
+              "name": "Accept",
+              "value": "application/atom+xml, application/xml, text/xml"
+            },
+            {
+              "name": "Accept-Encoding",
+              "value": "gzip, deflate"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "xml"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1248,
+        0
+      ],
+      "id": "51bcad5a-ef34-469e-853b-5d608a43bd74",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "dataPropertyName": "xml",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.xml",
+      "typeVersion": 1,
+      "position": [
+        1456,
+        0
+      ],
+      "id": "a5223d0b-d1dc-4425-a4fa-8eea5f696a6c",
+      "name": "XML"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "feed.entry",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1664,
+        0
+      ],
+      "id": "937b3cd4-ac63-4d1f-9606-a3218d68feb6",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nitems.sort((a, b) => {\n  const dateA = new Date(a.json.published || 0).getTime();\n  const dateB = new Date(b.json.published || 0).getTime();\n\n  return dateB - dateA;\n});\n\nreturn items;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1472,
+        -176
+      ],
+      "id": "07747677-7a9e-4d62-bb70-9fe610415c7c",
+      "name": "Sort SEC Filings"
+    },
+    {
+      "parameters": {
+        "maxItems": 10
+      },
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        1680,
+        -176
+      ],
+      "id": "5086b05d-197d-4209-8bac-1847aede0287",
+      "name": "Limit"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.link }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "=User-Agent",
+              "value": "AlgoTrade Student Project leech@post.bgu.ac.il"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "filing_index_html"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1872,
+        -176
+      ],
+      "id": "be9d4ca5-cd78-40fe-b9e0-9ee59fe6096a",
+      "name": "Get Filing Index Page"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const html = String($json.filing_index_html ?? '');\n\nif (!html) {\n  throw new Error('לא התקבל filing_index_html');\n}\n\n// הנתונים המקוריים מה-Limit\nconst original = $('Limit').item.json;\n\nconst filingUrl = String(original.link ?? '').trim();\nconst formType = String(original.filingType ?? '')\n  .trim()\n  .toUpperCase();\n\nif (!filingUrl) {\n  throw new Error('לא נמצא link מהצומת Limit');\n}\n\nfunction stripTags(value) {\n  return String(value)\n    .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')\n    .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/&nbsp;/gi, ' ')\n    .replace(/&#160;/gi, ' ')\n    .replace(/&amp;/gi, '&')\n    .replace(/&quot;/gi, '\"')\n    .replace(/&#39;/gi, \"'\")\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\n// בניית כתובת SEC מלאה בלי להשתמש ב-new URL\nfunction buildSecUrl(href) {\n  let decodedHref = String(href)\n    .replace(/&amp;/gi, '&')\n    .trim();\n\n  if (!decodedHref) {\n    return '';\n  }\n\n  // קישור מלא\n  if (\n    decodedHref.startsWith('https://') ||\n    decodedHref.startsWith('http://')\n  ) {\n    return decodedHref;\n  }\n\n  // קישור iXBRL מהצורה:\n  // /ix?doc=/Archives/edgar/data/.../file.htm\n  if (decodedHref.startsWith('/ix?doc=')) {\n    return (\n      'https://www.sec.gov' +\n      decodedHref.substring('/ix?doc='.length)\n    );\n  }\n\n  // קישור יחסי שמתחיל ב-/\n  if (decodedHref.startsWith('/')) {\n    return 'https://www.sec.gov' + decodedHref;\n  }\n\n  // קישור יחסי ללא /\n  const lastSlash = filingUrl.lastIndexOf('/');\n\n  if (lastSlash !== -1) {\n    return (\n      filingUrl.substring(0, lastSlash + 1) +\n      decodedHref\n    );\n  }\n\n  return '';\n}\n\nconst rows = [\n  ...html.matchAll(/<tr[^>]*>([\\s\\S]*?)<\\/tr>/gi)\n];\n\nconst documents = [];\n\nfor (const rowMatch of rows) {\n  const rowHtml = rowMatch[1];\n\n  const cells = [\n    ...rowHtml.matchAll(\n      /<td[^>]*>([\\s\\S]*?)<\\/td>/gi\n    )\n  ].map(match => stripTags(match[1]));\n\n  const linkMatch = rowHtml.match(\n    /<a[^>]*href\\s*=\\s*[\"']([^\"']+)[\"'][^>]*>/i\n  );\n\n  if (!linkMatch || cells.length < 4) {\n    continue;\n  }\n\n  const href = linkMatch[1];\n  const documentUrl = buildSecUrl(href);\n\n  if (!documentUrl) {\n    continue;\n  }\n\n  const sequence = cells[0] ?? '';\n  const description = cells[1] ?? '';\n  const documentName = cells[2] ?? '';\n  const documentType = String(\n    cells[3] ?? ''\n  ).toUpperCase();\n\n  const shouldIgnore =\n    /\\.(jpg|jpeg|png|gif|xml|xsd|css)$/i.test(\n      documentName\n    ) ||\n    documentType.includes('EX-101') ||\n    documentType.includes('GRAPHIC') ||\n    description\n      .toLowerCase()\n      .includes('complete submission text file');\n\n  if (!shouldIgnore) {\n    documents.push({\n      sequence,\n      description,\n      document_name: documentName,\n      document_type: documentType,\n      document_url: documentUrl\n    });\n  }\n}\n\nif (documents.length === 0) {\n  throw new Error(\n    `לא נמצאו מסמכים שימושיים. נמצאו ${rows.length} שורות HTML`\n  );\n}\n\n// זיהוי 8-K של תוצאות כספיות\nconst isEarnings8K =\n  formType === '8-K' &&\n  String(original.itemsDescription ?? '')\n    .toLowerCase()\n    .includes('2.02');\n\nlet selectedDocument;\n\nif (isEarnings8K) {\n  // ב-8-K של תוצאות נעדיף את הודעת התוצאות\n  selectedDocument =\n    documents.find(\n      doc => doc.document_type === 'EX-99.1'\n    ) ??\n    documents.find(\n      doc => doc.document_type.startsWith('EX-99')\n    ) ??\n    documents.find(\n      doc => doc.document_type === '8-K'\n    ) ??\n    documents[0];\n} else {\n  // ב-10-Q, 10-K וב-8-K רגיל נעדיף את הדוח הראשי\n  selectedDocument =\n    documents.find(\n      doc => doc.document_type === formType\n    ) ??\n    documents.find(\n      doc => doc.sequence === '1'\n    ) ??\n    documents[0];\n}\n\nreturn {\n  json: {\n    ...original,\n\n    document_url:\n      selectedDocument.document_url,\n\n    document_type:\n      selectedDocument.document_type,\n\n    document_description:\n      selectedDocument.description,\n\n    selection_reason:\n      isEarnings8K &&\n      selectedDocument.document_type.startsWith(\n        'EX-99'\n      )\n        ? 'Earnings 8-K: selected earnings exhibit'\n        : 'Selected primary filing document',\n\n    available_documents: documents\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2096,
+        -176
+      ],
+      "id": "7356bdd5-046b-47db-9703-d7ef5ab7cf51",
+      "name": "Find Main Document or Exhibit"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.document_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "=User-Agent",
+              "value": "AlgoTrade Student Project leech@post.bgu.ac.il"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "document_html"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2304,
+        -176
+      ],
+      "id": "e465be0b-f9f4-4a90-a694-6f2581b465b9",
+      "name": "Get Main Document"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const rawHtml = String($json.document_html ?? '');\n\nif (!rawHtml) {\n  throw new Error(\n    'לא התקבל document_html מהצומת Get Main Document'\n  );\n}\n\n// שמירת המטא-דאטה מהשלב שבו נבחר המסמך\nconst metadata =\n  $('Find Main Document or Exhibit').item.json;\n\n// פענוח HTML entities נפוצים וגם entities מספריים\nfunction decodeHtmlEntities(text) {\n  return String(text)\n    .replace(/&#(\\d+);/g, (_, code) => {\n      return String.fromCodePoint(Number(code));\n    })\n    .replace(/&#x([0-9a-f]+);/gi, (_, code) => {\n      return String.fromCodePoint(parseInt(code, 16));\n    })\n    .replace(/&nbsp;/gi, ' ')\n    .replace(/&ensp;/gi, ' ')\n    .replace(/&emsp;/gi, ' ')\n    .replace(/&amp;/gi, '&')\n    .replace(/&quot;/gi, '\"')\n    .replace(/&apos;/gi, \"'\")\n    .replace(/&#39;/gi, \"'\")\n    .replace(/&lt;/gi, '<')\n    .replace(/&gt;/gi, '>')\n    .replace(/&ndash;/gi, '–')\n    .replace(/&mdash;/gi, '—')\n    .replace(/&ldquo;/gi, '“')\n    .replace(/&rdquo;/gi, '”')\n    .replace(/&lsquo;/gi, '‘')\n    .replace(/&rsquo;/gi, '’')\n    .replace(/&bull;/gi, '•');\n}\n\nlet cleaned = rawHtml;\n\n// הסרת החלק הטכני והנסתר של Inline XBRL.\n// חלק זה מכיל contexts, schemas ויחידות ולא טקסט קריא מהדוח.\ncleaned = cleaned.replace(\n  /<ix:header\\b[^>]*>[\\s\\S]*?<\\/ix:header>/gi,\n  ' '\n);\n\n// הסרת קוד ותוכן שאינו חלק מהטקסט העסקי\ncleaned = cleaned\n  .replace(/<script\\b[^>]*>[\\s\\S]*?<\\/script>/gi, ' ')\n  .replace(/<style\\b[^>]*>[\\s\\S]*?<\\/style>/gi, ' ')\n  .replace(/<noscript\\b[^>]*>[\\s\\S]*?<\\/noscript>/gi, ' ')\n  .replace(/<!--[\\s\\S]*?-->/g, ' ');\n\n// יצירת הפרדות בין שורות וטבלאות לפני הסרת התגיות\ncleaned = cleaned\n  .replace(/<br\\s*\\/?>/gi, '\\n')\n  .replace(/<\\/p>/gi, '\\n\\n')\n  .replace(/<\\/div>/gi, '\\n')\n  .replace(/<\\/section>/gi, '\\n\\n')\n  .replace(/<\\/h[1-6]>/gi, '\\n\\n')\n  .replace(/<\\/li>/gi, '\\n')\n  .replace(/<\\/tr>/gi, '\\n')\n  .replace(/<\\/td>/gi, ' | ')\n  .replace(/<\\/th>/gi, ' | ')\n  .replace(/<\\/table>/gi, '\\n\\n')\n  .replace(/<hr\\b[^>]*>/gi, '\\n\\n');\n\n// הסרת כל שאר תגיות ה־HTML וה־XBRL.\n// הטקסט שבתוך התגיות נשמר.\ncleaned = cleaned.replace(/<[^>]+>/g, ' ');\n\n// פענוח תווים מיוחדים\ncleaned = decodeHtmlEntities(cleaned);\n\n// ניקוי רווחים ותווי בקרה\ncleaned = cleaned\n  .replace(\n    /[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]/g,\n    ' '\n  )\n  .replace(/\\r\\n/g, '\\n')\n  .replace(/\\r/g, '\\n')\n  .replace(/[ \\t]+/g, ' ')\n  .replace(/ *\\| */g, ' | ')\n  .replace(/[ \\t]+\\n/g, '\\n')\n  .replace(/\\n[ \\t]+/g, '\\n')\n  .replace(/\\n{3,}/g, '\\n\\n')\n  .trim();\n\nif (!cleaned) {\n  throw new Error(\n    'לא נשאר טקסט לאחר ניקוי ה-HTML'\n  );\n}\n\nreturn {\n  json: {\n    ...metadata,\n\n    original_html_characters: rawHtml.length,\n    cleaned_text_characters: cleaned.length,\n\n    cleaned_text: cleaned\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2512,
+        -176
+      ],
+      "id": "314f7e46-b395-4ec5-970d-f0249d255b7a",
+      "name": "Clean Filing HTML"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const text = String($json.cleaned_text ?? '').trim();\n\nif (!text) {\n  throw new Error('לא התקבל cleaned_text');\n}\n\nconst filingType = String(\n  $json.filingType ?? $json.document_type ?? ''\n)\n  .trim()\n  .toUpperCase();\n\nconst documentType = String(\n  $json.document_type ?? ''\n)\n  .trim()\n  .toUpperCase();\n\nfunction normalizeText(value) {\n  return String(value)\n    .replace(/\\r\\n/g, '\\n')\n    .replace(/\\r/g, '\\n')\n    .replace(/[ \\t]+/g, ' ')\n    .replace(/[ \\t]+\\n/g, '\\n')\n    .replace(/\\n[ \\t]+/g, '\\n')\n    .replace(/\\n{3,}/g, '\\n\\n')\n    .trim();\n}\n\n/*\n * מחזירה את כל המיקומים שבהם תבנית מסוימת מופיעה.\n */\nfunction findAllIndices(source, patterns) {\n  const indices = [];\n\n  for (const pattern of patterns) {\n    const regex = new RegExp(pattern, 'gi');\n\n    let match;\n\n    while ((match = regex.exec(source)) !== null) {\n      indices.push(match.index);\n\n      // הגנה מפני Regex שלא מתקדם\n      if (match.index === regex.lastIndex) {\n        regex.lastIndex++;\n      }\n    }\n  }\n\n  return [...new Set(indices)].sort((a, b) => a - b);\n}\n\n/*\n * בוחרת את ההופעה הראשונה שנמצאת אחרי minIndex.\n * שימושי כדי לדלג על תוכן העניינים.\n */\nfunction findFirstAfter(source, patterns, minIndex = 0) {\n  const indices = findAllIndices(source, patterns);\n\n  return (\n    indices.find(index => index >= minIndex) ??\n    -1\n  );\n}\n\n/*\n * בוחרת את ההופעה האחרונה של אחת מהכותרות.\n * שימושי בכותרות שמופיעות פעם בתוכן העניינים\n * ופעם נוספת בגוף הדוח.\n */\nfunction findLastIndex(source, patterns) {\n  const indices = findAllIndices(source, patterns);\n\n  if (indices.length === 0) {\n    return -1;\n  }\n\n  return indices[indices.length - 1];\n}\n\n/*\n * מוצאת את סוף הסעיף לאחר מיקום ההתחלה.\n */\nfunction findEndAfter(\n  source,\n  endPatterns,\n  startIndex,\n  fallbackLength\n) {\n  const possibleEnds = [];\n\n  for (const pattern of endPatterns) {\n    const regex = new RegExp(pattern, 'gi');\n    regex.lastIndex = startIndex + 20;\n\n    const match = regex.exec(source);\n\n    if (match && match.index > startIndex) {\n      possibleEnds.push(match.index);\n    }\n  }\n\n  if (possibleEnds.length > 0) {\n    return Math.min(...possibleEnds);\n  }\n\n  return Math.min(\n    source.length,\n    startIndex + fallbackLength\n  );\n}\n\nfunction extractSectionByStart(\n  source,\n  startIndex,\n  endPatterns,\n  maxCharacters\n) {\n  if (startIndex === -1) {\n    return '';\n  }\n\n  const endIndex = findEndAfter(\n    source,\n    endPatterns,\n    startIndex,\n    maxCharacters\n  );\n\n  const finalEnd = Math.min(\n    endIndex,\n    startIndex + maxCharacters\n  );\n\n  return source\n    .slice(startIndex, finalEnd)\n    .trim();\n}\n\nfunction addSection(sections, title, content) {\n  if (!content || content.length < 100) {\n    return;\n  }\n\n  sections.push(\n    `===== ${title} =====\\n${content}`\n  );\n}\n\nconst normalized = normalizeText(text);\nconst sections = [];\n\nlet selectionStrategy = '';\n\n/*\n * נשתמש בנקודת התחלה מינימלית כדי לדלג על\n * העמוד הראשון ועל תוכן העניינים.\n */\nconst skipBeginningIndex = Math.floor(\n  normalized.length * 0.05\n);\n\n/*\n * 8-K של תוצאות כספיות.\n */\nif (\n  filingType === '8-K' &&\n  documentType.startsWith('EX-99')\n) {\n  selectionStrategy =\n    'Earnings release: kept results, outlook and business highlights';\n\n  let earningsText = normalized;\n\n  /*\n   * חותכים לפני boilerplate משפטי/תקשורתי.\n   * משאירים את התוצאות, התחזית וה־Highlights.\n   */\n  const boilerplateStart = findFirstAfter(\n    earningsText,\n    [\n      'Conference Call and Webcast Information',\n      'Non-GAAP Measures',\n      'About NVIDIA',\n      'For further information, contact',\n      'Certain statements in this press release'\n    ],\n    3000\n  );\n\n  if (boilerplateStart !== -1) {\n    earningsText = earningsText.slice(\n      0,\n      boilerplateStart\n    );\n  }\n\n  addSection(\n    sections,\n    'EARNINGS RELEASE',\n    earningsText.slice(0, 30000)\n  );\n}\n\n/*\n * 8-K רגיל.\n */\nelse if (filingType === '8-K') {\n  selectionStrategy =\n    'Current report: selected disclosed event';\n\n  const itemStart = findLastIndex(\n    normalized,\n    [\n      'Item\\\\s+1\\\\.01\\\\.',\n      'Item\\\\s+2\\\\.01\\\\.',\n      'Item\\\\s+2\\\\.02\\\\.',\n      'Item\\\\s+3\\\\.01\\\\.',\n      'Item\\\\s+5\\\\.02\\\\.',\n      'Item\\\\s+7\\\\.01\\\\.',\n      'Item\\\\s+8\\\\.01\\\\.'\n    ]\n  );\n\n  const eventSection = extractSectionByStart(\n    normalized,\n    itemStart,\n    [\n      '\\\\nItem\\\\s+9\\\\.01\\\\.',\n      '\\\\nSIGNATURE\\\\n'\n    ],\n    15000\n  );\n\n  addSection(\n    sections,\n    'CURRENT EVENT',\n    eventSection || normalized.slice(0, 15000)\n  );\n}\n\n/*\n * 10-Q ו־10-K.\n */\nelse if (\n  filingType === '10-Q' ||\n  filingType === '10-K'\n) {\n  selectionStrategy =\n    'Periodic report: selected actual filing sections after table of contents';\n\n  /*\n   * 1. דוחות כספיים\n   *\n   * בכוונה מחפשים רק אחרי 5% מתחילת המסמך,\n   * כדי לא לבחור את הכותרת שבתוכן העניינים.\n   */\n  const financialStart = findFirstAfter(\n    normalized,\n    [\n      'Condensed Consolidated Statements of Income\\\\s*\\\\n',\n      'Consolidated Statements of Income\\\\s*\\\\n',\n      'Consolidated Statements of Operations\\\\s*\\\\n'\n    ],\n    skipBeginningIndex\n  );\n\n  const financialStatements =\n    extractSectionByStart(\n      normalized,\n      financialStart,\n      [\n        '\\\\nNotes to Condensed Consolidated Financial Statements',\n        '\\\\nNotes to Consolidated Financial Statements'\n      ],\n      12000\n    );\n\n  addSection(\n    sections,\n    'FINANCIAL STATEMENTS',\n    financialStatements\n  );\n\n  /*\n   * 2. MD&A\n   *\n   * נבחרת ההופעה האחרונה, כדי לא לבחור\n   * את הכותרת מתוכן העניינים.\n   */\n  const managementStart = findLastIndex(\n    normalized,\n    filingType === '10-Q'\n      ? [\n          \"Item\\\\s+2\\\\.\\\\s*Management['’]s Discussion and Analysis\"\n        ]\n      : [\n          \"Item\\\\s+7\\\\.\\\\s*Management['’]s Discussion and Analysis\"\n        ]\n  );\n\n  const managementDiscussion =\n    extractSectionByStart(\n      normalized,\n      managementStart,\n      filingType === '10-Q'\n        ? [\n            '\\\\nItem\\\\s+3\\\\.\\\\s*Quantitative',\n            '\\\\nItem\\\\s+4\\\\.\\\\s*Controls'\n          ]\n        : [\n            '\\\\nItem\\\\s+7A\\\\.',\n            '\\\\nItem\\\\s+8\\\\.'\n          ],\n      22000\n    );\n\n  addSection(\n    sections,\n    'MANAGEMENT DISCUSSION AND ANALYSIS',\n    managementDiscussion\n  );\n\n  /*\n   * 3. Risk Factors\n   *\n   * נעדיף כותרת Item 1A האמיתית,\n   * ולא אזכור כללי של הביטוי Risk Factors.\n   */\n  const riskStart = findLastIndex(\n    normalized,\n    [\n      'Item\\\\s+1A\\\\.\\\\s*Risk Factors'\n    ]\n  );\n\n  const riskFactors = extractSectionByStart(\n    normalized,\n    riskStart,\n    [\n      '\\\\nItem\\\\s+1B\\\\.',\n      '\\\\nItem\\\\s+2\\\\.',\n      '\\\\nItem\\\\s+3\\\\.',\n      '\\\\nItem\\\\s+5\\\\.',\n      '\\\\nItem\\\\s+6\\\\.'\n    ],\n    12000\n  );\n\n  addSection(\n    sections,\n    'RISK FACTORS',\n    riskFactors\n  );\n\n  /*\n   * 4. נזילות ומקורות הון\n   */\n  const liquidityStart = findLastIndex(\n    normalized,\n    [\n      'Liquidity and Capital Resources'\n    ]\n  );\n\n  const liquidity = extractSectionByStart(\n    normalized,\n    liquidityStart,\n    [\n      '\\\\nCapital Return to Shareholders',\n      '\\\\nOutstanding Indebtedness',\n      '\\\\nMaterial Cash Requirements',\n      '\\\\nItem\\\\s+3\\\\.'\n    ],\n    7000\n  );\n\n  addSection(\n    sections,\n    'LIQUIDITY AND CAPITAL RESOURCES',\n    liquidity\n  );\n\n  /*\n   * 5. Buyback ודיבידנד\n   *\n   * נעדיף את הסעיף מתוך MD&A:\n   * Capital Return to Shareholders\n   * ולא את Capital Return Program מתוך ההערות.\n   */\n  let capitalReturnStart = findLastIndex(\n    normalized,\n    [\n      'Capital Return to Shareholders'\n    ]\n  );\n\n  if (capitalReturnStart === -1) {\n    capitalReturnStart = findLastIndex(\n      normalized,\n      [\n        'Capital Return Program'\n      ]\n    );\n  }\n\n  const capitalReturn = extractSectionByStart(\n    normalized,\n    capitalReturnStart,\n    [\n      '\\\\nOutstanding Indebtedness',\n      '\\\\nMaterial Cash Requirements',\n      '\\\\nItem\\\\s+2\\\\.',\n      '\\\\nItem\\\\s+3\\\\.',\n      '\\\\nNote\\\\s+13\\\\s*-'\n    ],\n    5000\n  );\n\n  addSection(\n    sections,\n    'CAPITAL RETURN',\n    capitalReturn\n  );\n}\n\n/*\n * fallback לדיווחים אחרים.\n */\nelse {\n  selectionStrategy =\n    'Fallback: selected first relevant portion';\n\n  addSection(\n    sections,\n    'FILING CONTENT',\n    normalized.slice(0, 20000)\n  );\n}\n\nlet relevantText = sections.join('\\n\\n');\n\nif (!relevantText) {\n  relevantText = normalized.slice(0, 20000);\n\n  selectionStrategy =\n    'Fallback: expected section headings were not found';\n}\n\n/*\n * מגבלת אורך סופית.\n */\nconst MAX_FINAL_CHARACTERS = 50000;\n\nlet wasTruncated = false;\n\nif (relevantText.length > MAX_FINAL_CHARACTERS) {\n  relevantText =\n    relevantText.slice(0, MAX_FINAL_CHARACTERS) +\n    '\\n\\n[Content truncated to fit analysis limit]';\n\n  wasTruncated = true;\n}\n\n/*\n * לא מעבירים הלאה שוב את cleaned_text המלא,\n * כדי להקטין את ה־JSON של ה־Workflow.\n */\nconst {\n  cleaned_text,\n  available_documents,\n  ...metadata\n} = $json;\n\nreturn {\n  json: {\n    ...metadata,\n\n    selection_strategy: selectionStrategy,\n\n    cleaned_text_characters:\n      normalized.length,\n\n    relevant_text_characters:\n      relevantText.length,\n\n    relevant_text_truncated:\n      wasTruncated,\n\n    selected_sections:\n      sections.map(section => {\n        const firstLine =\n          section.split('\\n')[0];\n\n        return firstLine\n          .replace(/=/g, '')\n          .trim();\n      }),\n\n    relevant_text: relevantText\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2720,
+        -176
+      ],
+      "id": "8afbd470-3fef-4604-9eeb-f5e381f72320",
+      "name": "Select Relevant Filing Content"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const relevantText = String(\n  $json.relevant_text ?? ''\n).trim();\n\nif (!relevantText) {\n  throw new Error(\n    'לא התקבל relevant_text מהצומת Select Relevant Filing Content'\n  );\n}\n\nconst ticker = String(\n  $json.ticker ?? ''\n).trim().toUpperCase();\n\nconst companyName = String(\n  $json.companyName ?? ''\n).trim();\n\nconst filingType = String(\n  $json.filingType ??\n  $json.document_type ??\n  ''\n).trim().toUpperCase();\n\nconst documentType = String(\n  $json.document_type ?? ''\n).trim().toUpperCase();\n\nconst published = String(\n  $json.published ?? ''\n).trim();\n\nconst accessionNumber = String(\n  $json.accessionNumber ?? ''\n).trim();\n\nconst source = String(\n  $json.source ?? 'SEC EDGAR'\n).trim();\n\nconst filingUrl = String(\n  $json.link ?? ''\n).trim();\n\nconst documentUrl = String(\n  $json.document_url ?? ''\n).trim();\n\nconst itemsDescription = String(\n  $json.itemsDescription ?? ''\n).trim();\n\nconst selectedSections = Array.isArray(\n  $json.selected_sections\n)\n  ? $json.selected_sections\n  : [];\n\n/*\n * סיווג כללי של המסמך.\n */\nlet filingCategory = 'other_filing';\n\nif (\n  filingType === '8-K' &&\n  documentType.startsWith('EX-99')\n) {\n  filingCategory = 'earnings_release';\n} else if (\n  filingType === '10-Q' ||\n  filingType === '10-K'\n) {\n  filingCategory = 'periodic_financial_report';\n} else if (filingType === '8-K') {\n  filingCategory = 'current_event';\n}\n\n/*\n * יצירת תאריך קריא.\n */\nlet filingDate = published;\n\nif (published) {\n  const parsedDate = new Date(published);\n\n  if (!Number.isNaN(parsedDate.getTime())) {\n    filingDate = parsedDate\n      .toISOString()\n      .slice(0, 10);\n  }\n}\n\n/*\n * הוראות שונות לפי סוג הדיווח.\n */\nlet analysisFocus = '';\n\nif (filingCategory === 'earnings_release') {\n  analysisFocus = `\nFocus especially on:\n- Revenue growth or decline\n- Earnings and EPS\n- Gross margin\n- Guidance and outlook\n- Performance by business segment\n- Data Center or other major growth areas\n- Share repurchases and dividends\n- Positive or negative surprises\n`;\n} else if (\n  filingCategory === 'periodic_financial_report'\n) {\n  analysisFocus = `\nFocus especially on:\n- Revenue and profitability trends\n- Management discussion\n- Growth drivers\n- Risks and uncertainties\n- Liquidity and capital resources\n- Customer concentration\n- Competition\n- Export restrictions and regulation\n- Share repurchases and dividends\n`;\n} else if (filingCategory === 'current_event') {\n  analysisFocus = `\nFocus especially on:\n- What event occurred\n- Who is involved\n- Effective dates\n- Financial or strategic implications\n- Whether the event is routine or material\n- Possible positive, neutral, or negative impact\n`;\n}\n\n/*\n * קלט אחיד לסוכן.\n */\nconst analysisInput = `\nYou are analyzing an official SEC filing for a financial sentiment workflow.\n\nDOCUMENT METADATA\nCompany: ${companyName || 'Unknown'}\nTicker: ${ticker || 'Unknown'}\nFiling type: ${filingType || 'Unknown'}\nDocument type: ${documentType || 'Unknown'}\nFiling category: ${filingCategory}\nFiling date: ${filingDate || 'Unknown'}\nSEC items: ${itemsDescription || 'Not specified'}\nAccession number: ${accessionNumber || 'Unknown'}\nSource: ${source}\nSelected sections: ${\n  selectedSections.length\n    ? selectedSections.join(', ')\n    : 'Not specified'\n}\n\nANALYSIS GUIDANCE\nAnalyze only the information contained in the filing.\nDo not invent facts.\nSeparate factual information from interpretation.\nConsider both positive and negative information.\nEvaluate the likely financial significance of the filing.\n${analysisFocus}\n\nSEC FILING CONTENT\n--------------------\n${relevantText}\n--------------------\nEND OF SEC FILING CONTENT\n`.trim();\n\n/*\n * מסירים שדות גדולים שאין צורך להעביר שוב.\n */\nconst {\n  relevant_text,\n  cleaned_text,\n  filing_index_html,\n  document_html,\n  available_documents,\n  ...metadata\n} = $json;\n\nreturn {\n  json: {\n    ...metadata,\n\n    filing_category: filingCategory,\n    filing_date: filingDate,\n\n    analysis_metadata: {\n      company_name: companyName,\n      ticker,\n      filing_type: filingType,\n      document_type: documentType,\n      filing_category: filingCategory,\n      filing_date: filingDate,\n      accession_number: accessionNumber,\n      selected_sections: selectedSections,\n      filing_url: filingUrl,\n      document_url: documentUrl\n    },\n\n    analysis_input_characters:\n      analysisInput.length,\n\n    analysis_input: analysisInput\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2928,
+        -176
+      ],
+      "id": "f59975ba-0c72-438d-918b-dcfc047eb1fc",
+      "name": "Prepare SEC Analysis Input"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nif (items.length === 0) {\n  throw new Error('לא התקבלו מסמכי SEC');\n}\n\nconst ticker = String(\n  items[0].json.ticker ?? ''\n)\n  .trim()\n  .toUpperCase();\n\nconst companyName = String(\n  items[0].json.companyName ?? ''\n).trim();\n\nconst documents = items\n  .map((item, index) => {\n    const data = item.json;\n\n    const content = String(\n      data.analysis_input ?? ''\n    ).trim();\n\n    if (!content) {\n      return null;\n    }\n\n    return `\n===== DOCUMENT ${index + 1} =====\n${content}\n===== END DOCUMENT ${index + 1} =====\n`.trim();\n  })\n  .filter(Boolean);\n\nif (documents.length === 0) {\n  throw new Error(\n    'לא נמצא analysis_input במסמכים'\n  );\n}\n\nconst documentsText = documents.join('\\n\\n');\n\nreturn [\n  {\n    json: {\n      ticker,\n      company_name: companyName,\n      document_count: documents.length,\n      documents_text: documentsText,\n      documents_text_characters:\n        documentsText.length\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3152,
+        -176
+      ],
+      "id": "3e76226f-ad53-44c6-824b-ec0c4c6721a3",
+      "name": "Build Analyst Payload"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "l0EMTeTMuP8N7JSP",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/l0EMTeTMuP8N7JSP",
+          "cachedResultName": "Financial Sentiment Analyst Agent"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        3376,
+        -176
+      ],
+      "id": "ca193f6e-d569-4c0f-b771-6ac35d11b1a4",
+      "name": "Run Financial Sentiment Analyst"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        352,
+        0
+      ],
+      "id": "d07dda84-2695-4e4e-8409-084414daee2d",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        -32
+      ],
+      "id": "1fbfa627-028d-49a8-96c5-ef020eec600d",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nif (items.length === 0) {\n  throw new Error(\n    'Financial Sentiment Analyst returned no result'\n  );\n}\n\nconst rawResult = items[0].json;\n\n// לעיתים התוצאה מה-AI Agent נמצאת בתוך output\nconst initialAnalysis =\n  rawResult.output ??\n  rawResult;\n\nconst analystPayload =\n  $('Build Analyst Payload')\n    .first()\n    .json;\n\nconst ticker = String(\n  initialAnalysis.ticker ??\n  analystPayload.ticker ??\n  ''\n)\n  .trim()\n  .toUpperCase();\n\nif (!ticker) {\n  throw new Error(\n    'Ticker is missing from analyst result'\n  );\n}\n\nreturn [\n  {\n    json: {\n      ticker,\n      company_name:\n        analystPayload.company_name ?? ticker,\n\n      sec_document_count:\n        analystPayload.document_count ?? 0,\n\n      initial_analysis:\n        initialAnalysis\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3584,
+        -176
+      ],
+      "id": "db0e2d25-9dff-4617-be0a-c2cd2422e665",
+      "name": "Build Initial Analyst Result"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Input Ticker": {
+      "main": [
+        []
+      ]
+    },
+    "Prepare Company Search": {
+      "main": [
+        [
+          {
+            "node": "Create RSS Feed List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create RSS Feed List": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Remove Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize SEC Filing": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "XML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "XML": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Normalize SEC Filing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Duplicates": {
+      "main": [
+        [
+          {
+            "node": "Sort SEC Filings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sort SEC Filings": {
+      "main": [
+        [
+          {
+            "node": "Limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit": {
+      "main": [
+        [
+          {
+            "node": "Get Filing Index Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Filing Index Page": {
+      "main": [
+        [
+          {
+            "node": "Find Main Document or Exhibit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Main Document or Exhibit": {
+      "main": [
+        [
+          {
+            "node": "Get Main Document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Main Document": {
+      "main": [
+        [
+          {
+            "node": "Clean Filing HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean Filing HTML": {
+      "main": [
+        [
+          {
+            "node": "Select Relevant Filing Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Relevant Filing Content": {
+      "main": [
+        [
+          {
+            "node": "Prepare SEC Analysis Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare SEC Analysis Input": {
+      "main": [
+        [
+          {
+            "node": "Build Analyst Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Analyst Payload": {
+      "main": [
+        [
+          {
+            "node": "Run Financial Sentiment Analyst",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Prepare Company Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Financial Sentiment Analyst": {
+      "main": [
+        [
+          {
+            "node": "Build Initial Analyst Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "4df42a4c-c28c-4471-a94f-f61d640c6045",
+  "meta": {
+    "instanceId": "9ab1c320b82bc33b8fae8fcfcd3f9b34ecbc8e31930926afa7a2964d5374d7dd"
+  },
+  "id": "NQ3yHScKw6ShZ0jt",
+  "tags": []
+}

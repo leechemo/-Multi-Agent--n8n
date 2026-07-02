@@ -1,0 +1,368 @@
+{
+  "name": "Marketaux and Finnhub News Collector",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -768,
+        -336
+      ],
+      "id": "51ee6acf-ac33-475b-9a10-12b30352668b",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c6db1be0-c0bc-428d-b77a-54543a917b0d",
+              "name": "ticker",
+              "value": "MSFT",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -544,
+        -336
+      ],
+      "id": "5bafb33b-f8ae-4fd8-9588-f88c843d3546",
+      "name": "Input Ticker"
+    },
+    {
+      "parameters": {
+        "jsCode": "const ticker = String($input.first().json.ticker || '')\n  .trim()\n  .toUpperCase();\n\nif (!ticker) {\n  throw new Error('Ticker is missing');\n}\n\nconst companies = {\n  AAPL: {\n    companyName: 'Apple',\n    aliases: ['Apple', 'Apple Inc', 'Apple Inc.', 'AAPL']\n  },\n  TSLA: {\n    companyName: 'Tesla',\n    aliases: ['Tesla', 'Tesla Inc', 'Tesla Inc.', 'TSLA']\n  },\n  NVDA: {\n    companyName: 'NVIDIA',\n    aliases: ['NVIDIA', 'Nvidia', 'NVIDIA Corporation', 'NVDA']\n  },\n  MSFT: {\n    companyName: 'Microsoft',\n    aliases: ['Microsoft', 'Microsoft Corporation', 'MSFT']\n  },\n  AMZN: {\n    companyName: 'Amazon',\n    aliases: ['Amazon', 'Amazon.com', 'Amazon.com Inc.', 'AMZN']\n  },\n  GOOGL: {\n    companyName: 'Alphabet',\n    aliases: ['Google', 'Alphabet', 'Alphabet Inc.', 'GOOGL']\n  },\n  META: {\n    companyName: 'Meta',\n    aliases: ['Meta', 'Meta Platforms', 'Facebook', 'META']\n  }\n};\n\nconst company = companies[ticker] || {\n  companyName: ticker,\n  aliases: [ticker]\n};\n\nreturn [\n  {\n    json: {\n      ticker,\n      companyName: company.companyName,\n      aliases: company.aliases\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        112,
+        -64
+      ],
+      "id": "289bd6e1-54ac-4ff8-b040-28dc56a2c5d1",
+      "name": "Prepare Company Search"
+    },
+    {
+      "parameters": {
+        "url": "https://api.marketaux.com/v1/news/all",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "api_token",
+              "value": "PDNYdawr2qYTaffY7W1vKNV6Ioehd4MNyu9zav5c"
+            },
+            {
+              "name": "symbols",
+              "value": "={{ $json.ticker }}"
+            },
+            {
+              "name": "language",
+              "value": "en"
+            },
+            {
+              "name": "filter_entities",
+              "value": "true"
+            },
+            {
+              "name": "must_have_entities",
+              "value": "true"
+            },
+            {
+              "name": "limit",
+              "value": "3"
+            },
+            {
+              "name": "published_after",
+              "value": "={{ $now.minus({ days: 14 }).toFormat('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "sort",
+              "value": "entity_match_score"
+            },
+            {
+              "name": "sort_order",
+              "value": "desc"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        384,
+        -64
+      ],
+      "id": "013450aa-0e55-470b-9e2f-e17af2e7f3c3",
+      "name": "Get Marketaux News"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        608,
+        -64
+      ],
+      "id": "be400681-3afc-46ef-8d7b-261bd0ef43c5",
+      "name": "Split Out Marketaux Data"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const article = $json;\n\n// פרטי החברה שהתקבלו מהצומת Prepare Company Search\nconst companyData =\n  $('Prepare Company Search').first().json;\n\nconst ticker = String(\n  companyData.ticker || ''\n)\n  .trim()\n  .toUpperCase();\n\nconst companyName = String(\n  companyData.companyName || ticker\n).trim();\n\nconst aliases = Array.isArray(companyData.aliases)\n  ? companyData.aliases\n  : [companyName, ticker];\n\n// טקסטים מתוך הכתבה\nconst title = String(article.title || '').trim();\nconst description = String(\n  article.description || ''\n).trim();\nconst snippet = String(article.snippet || '').trim();\n\nconst titleLower = title.toLowerCase();\nconst descriptionLower = description.toLowerCase();\nconst snippetLower = snippet.toLowerCase();\n\n// רשימת מונחי החיפוש של החברה\nconst searchTerms = [\n  ticker,\n  companyName,\n  ...aliases\n]\n  .map(term => String(term).trim().toLowerCase())\n  .filter(Boolean);\n\n// מסירים כפילויות\nconst uniqueSearchTerms = [\n  ...new Set(searchTerms)\n];\n\n// בדיקה האם אחד משמות החברה מופיע בטקסט\nfunction containsCompany(text) {\n  return uniqueSearchTerms.some(term =>\n    text.includes(term)\n  );\n}\n\nconst companyInTitle =\n  containsCompany(titleLower);\n\nconst companyInDescription =\n  containsCompany(descriptionLower);\n\nconst companyInSnippet =\n  containsCompany(snippetLower);\n\n// מציאת הישות שמתאימה לטיקר המבוקש\nconst entities = Array.isArray(article.entities)\n  ? article.entities\n  : [];\n\nconst matchingEntity = entities.find(entity =>\n  String(entity.symbol || '')\n    .trim()\n    .toUpperCase() === ticker\n);\n\nconst matchScore = Number(\n  matchingEntity?.match_score || 0\n);\n\nconst sentimentScore =\n  matchingEntity?.sentiment_score ?? null;\n\n// חישוב ציון רלוונטיות פנימי\nlet relevancePoints = 0;\n\nif (companyInTitle) {\n  relevancePoints += 3;\n}\n\nif (companyInDescription) {\n  relevancePoints += 2;\n}\n\nif (companyInSnippet) {\n  relevancePoints += 1;\n}\n\nif (matchScore >= 15) {\n  relevancePoints += 2;\n} else if (matchScore >= 10) {\n  relevancePoints += 1;\n}\n\n// כתבה תעבור אם היא באמת עוסקת בחברה,\n// ולא רק מזכירה אותה באופן צדדי.\nconst isRelevant =\n  companyInTitle ||\n  companyInDescription ||\n  (companyInSnippet && matchScore >= 10) ||\n  matchScore >= 15;\n\nif (!isRelevant) {\n  return null;\n}\n\nreturn {\n  json: {\n    uuid: String(article.uuid || ''),\n\n    ticker,\n    companyName,\n\n    title,\n\n    summary:\n      description ||\n      snippet ||\n      '',\n\n    description,\n    snippet,\n\n    link: String(article.url || ''),\n\n    published: String(\n      article.published_at || ''\n    ),\n\n    source: String(\n      article.source || 'Marketaux'\n    ),\n\n    news_provider: 'Marketaux',\n\n    match_score: matchScore,\n    sentiment_score: sentimentScore,\n\n    relevance_points: relevancePoints,\n\n    relevance_reasons: {\n      company_in_title: companyInTitle,\n      company_in_description:\n        companyInDescription,\n      company_in_snippet: companyInSnippet,\n      marketaux_match_score: matchScore\n    }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        816,
+        -64
+      ],
+      "id": "16b318e6-ffe8-4c28-88fd-af85a68042cd",
+      "name": "Filter and Normalize Marketaux News"
+    },
+    {
+      "parameters": {
+        "url": "https://finnhub.io/api/v1/company-news",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "symbol",
+              "value": "={{ $json.ticker }}"
+            },
+            {
+              "name": "from",
+              "value": "={{ $now.minus({ days: 14 }).toFormat('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "to",
+              "value": "={{ $now.toFormat('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "token",
+              "value": "d8r5gv1r01quatdcvav0d8r5gv1r01quatdcvavg"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        384,
+        160
+      ],
+      "id": "35d75367-f3c1-4de7-b655-db51f60ef378",
+      "name": "Get Finnhub News"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst companyData =\n  $('Prepare Company Search').first().json;\n\nconst ticker = String(companyData.ticker || '')\n  .trim()\n  .toUpperCase();\n\nconst companyName = String(\n  companyData.companyName || ticker\n).trim();\n\nconst aliases = Array.isArray(companyData.aliases)\n  ? companyData.aliases\n  : [companyName, ticker];\n\n// בניית שמות אפשריים של החברה\nconst searchTerms = [\n  ticker,\n  companyName,\n  ...aliases\n]\n  .map(value => String(value).trim().toLowerCase())\n  .filter(Boolean);\n\nconst uniqueTerms = [...new Set(searchTerms)];\n\nfunction containsCompany(text) {\n  const normalizedText = String(text || '').toLowerCase();\n\n  return uniqueTerms.some(term =>\n    normalizedText.includes(term)\n  );\n}\n\n// נרמול כותרת לצורך זיהוי כפילויות\nfunction normalizeHeadline(text) {\n  return String(text || '')\n    .toLowerCase()\n    .replace(/&[^;]+;/g, ' ')\n    .replace(/[^a-z0-9]+/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nconst candidates = [];\n\nfor (const item of items) {\n  const article = item.json;\n\n  const title = String(\n    article.headline || ''\n  ).trim();\n\n  const summary = String(\n    article.summary || ''\n  ).trim();\n\n  const link = String(\n    article.url || ''\n  ).trim();\n\n  if (!title || !link) {\n    continue;\n  }\n\n  const companyInTitle =\n    containsCompany(title);\n\n  const companyInSummary =\n    containsCompany(summary);\n\n  const relatedTickers = String(\n    article.related || ''\n  )\n    .split(',')\n    .map(value => value.trim().toUpperCase())\n    .filter(Boolean);\n\n  const tickerInRelated =\n    relatedTickers.includes(ticker);\n\n  /*\n   * related לבדו אינו מספיק,\n   * כי Finnhub סימן גם כתבות על SpaceX כ-MSFT.\n   */\n  let relevanceScore = 0;\n\n  if (companyInTitle) {\n    relevanceScore += 5;\n  }\n\n  if (companyInSummary) {\n    relevanceScore += 2;\n  }\n\n  if (tickerInRelated) {\n    relevanceScore += 1;\n  }\n\n  /*\n   * תנאי מעבר:\n   * החברה חייבת להופיע בכותרת,\n   * או להופיע בתקציר יחד עם related מתאים.\n   */\n  const isRelevant =\n    companyInTitle ||\n    (companyInSummary && tickerInRelated);\n\n  if (!isRelevant) {\n    continue;\n  }\n\n  const timestamp = Number(\n    article.datetime || 0\n  );\n\n  let published = '';\n\n  if (timestamp > 0) {\n    published =\n      new Date(timestamp * 1000).toISOString();\n  }\n\n  candidates.push({\n    id: String(article.id || ''),\n    ticker,\n    companyName,\n\n    title,\n    summary,\n\n    link,\n    published,\n\n    source: String(\n      article.source || 'Finnhub'\n    ),\n\n    news_provider: 'Finnhub',\n\n    relevance_score: relevanceScore,\n\n    relevance_reasons: {\n      company_in_title: companyInTitle,\n      company_in_summary: companyInSummary,\n      ticker_in_related: tickerInRelated\n    },\n\n    original_datetime: timestamp,\n    normalized_headline:\n      normalizeHeadline(title)\n  });\n}\n\n// מיון קודם לפי רלוונטיות,\n// ואחר כך לפי תאריך חדש יותר\ncandidates.sort((a, b) => {\n  if (b.relevance_score !== a.relevance_score) {\n    return b.relevance_score - a.relevance_score;\n  }\n\n  return (\n    b.original_datetime -\n    a.original_datetime\n  );\n});\n\n// הסרת כפילויות\nconst seenUrls = new Set();\nconst seenTitles = new Set();\nconst uniqueArticles = [];\n\nfor (const article of candidates) {\n  const urlKey = article.link.toLowerCase();\n  const titleKey = article.normalized_headline;\n\n  if (\n    seenUrls.has(urlKey) ||\n    seenTitles.has(titleKey)\n  ) {\n    continue;\n  }\n\n  seenUrls.add(urlKey);\n  seenTitles.add(titleKey);\n\n  uniqueArticles.push(article);\n}\n\n// עד 7 כתבות מ-Finnhub\nconst selected = uniqueArticles.slice(0, 7);\n\nreturn selected.map(article => {\n  const {\n    original_datetime,\n    normalized_headline,\n    ...output\n  } = article;\n\n  return {\n    json: output\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        160
+      ],
+      "id": "ab3fa577-d6c1-481a-92ac-f3cce85bdcec",
+      "name": "Filter Normalize and Limit Finnhub News"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1088,
+        80
+      ],
+      "id": "21f0dacb-13b1-406c-9e7c-f346f2e9be08",
+      "name": "Merge Financial News"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputItems = $input.all();\n\n// נרמול כותרת לצורך השוואה בין המקורות\nfunction normalizeTitle(value) {\n  return String(value || '')\n    .toLowerCase()\n    .replace(/&[^;]+;/g, ' ')\n    .replace(/\\bcorporation\\b/g, ' ')\n    .replace(/\\bcorp\\b/g, ' ')\n    .replace(/\\binc\\b/g, ' ')\n    .replace(/\\bmsft\\b/g, ' ')\n    .replace(/[^a-z0-9]+/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\n// יצירת רשימת מילים משמעותיות מהכותרת\nfunction getTitleWords(value) {\n  const ignoredWords = new Set([\n    'the',\n    'a',\n    'an',\n    'and',\n    'or',\n    'of',\n    'to',\n    'for',\n    'in',\n    'on',\n    'at',\n    'as',\n    'is',\n    'are',\n    'was',\n    'with',\n    'from',\n    'by',\n    'this',\n    'that'\n  ]);\n\n  return normalizeTitle(value)\n    .split(' ')\n    .filter(word =>\n      word.length > 2 &&\n      !ignoredWords.has(word)\n    );\n}\n\n// בדיקת דמיון בין שתי כותרות\nfunction titleSimilarity(firstTitle, secondTitle) {\n  const firstWords = new Set(\n    getTitleWords(firstTitle)\n  );\n\n  const secondWords = new Set(\n    getTitleWords(secondTitle)\n  );\n\n  if (\n    firstWords.size === 0 ||\n    secondWords.size === 0\n  ) {\n    return 0;\n  }\n\n  let commonWords = 0;\n\n  for (const word of firstWords) {\n    if (secondWords.has(word)) {\n      commonWords++;\n    }\n  }\n\n  return commonWords /\n    Math.min(firstWords.size, secondWords.size);\n}\n\n// עדיפות לפריט בעל מידע עשיר יותר\nfunction articleQuality(article) {\n  let score = 0;\n\n  if (article.title) {\n    score += 2;\n  }\n\n  if (article.summary) {\n    score += Math.min(\n      String(article.summary).length / 200,\n      3\n    );\n  }\n\n  if (article.link) {\n    score += 1;\n  }\n\n  if (article.published) {\n    score += 1;\n  }\n\n  if (article.news_provider === 'Marketaux') {\n    score += 0.5;\n  }\n\n  return score;\n}\n\nconst articles = inputItems\n  .map(item => item.json)\n  .filter(article =>\n    article.title &&\n    article.link\n  );\n\n// ממיינים תחילה לפי תאריך, החדש ביותר ראשון\narticles.sort((a, b) => {\n  const firstDate =\n    new Date(a.published || 0).getTime();\n\n  const secondDate =\n    new Date(b.published || 0).getTime();\n\n  return secondDate - firstDate;\n});\n\nconst selectedArticles = [];\n\nfor (const article of articles) {\n  const normalizedCurrentTitle =\n    normalizeTitle(article.title);\n\n  let duplicateIndex = -1;\n\n  for (\n    let index = 0;\n    index < selectedArticles.length;\n    index++\n  ) {\n    const existing =\n      selectedArticles[index];\n\n    const sameUrl =\n      String(existing.link || '')\n        .toLowerCase() ===\n      String(article.link || '')\n        .toLowerCase();\n\n    const exactSameTitle =\n      normalizeTitle(existing.title) ===\n      normalizedCurrentTitle;\n\n    const similarTitle =\n      titleSimilarity(\n        existing.title,\n        article.title\n      ) >= 0.8;\n\n    if (\n      sameUrl ||\n      exactSameTitle ||\n      similarTitle\n    ) {\n      duplicateIndex = index;\n      break;\n    }\n  }\n\n  // לא נמצאה כפילות\n  if (duplicateIndex === -1) {\n    selectedArticles.push(article);\n    continue;\n  }\n\n  // נמצאה כפילות:\n  // נשמור את הגרסה בעלת המידע העשיר יותר\n  const existingArticle =\n    selectedArticles[duplicateIndex];\n\n  if (\n    articleQuality(article) >\n    articleQuality(existingArticle)\n  ) {\n    selectedArticles[duplicateIndex] =\n      article;\n  }\n}\n\n// מיון מחדש לפי תאריך\nselectedArticles.sort((a, b) => {\n  const firstDate =\n    new Date(a.published || 0).getTime();\n\n  const secondDate =\n    new Date(b.published || 0).getTime();\n\n  return secondDate - firstDate;\n});\n\n// עד 10 כתבות בסך הכול\nreturn selectedArticles\n  .slice(0, 10)\n  .map(article => ({\n    json: article\n  }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1296,
+        80
+      ],
+      "id": "5ddeaf25-2706-450f-b5cb-91633ae5f73c",
+      "name": "Deduplicate and Limit News"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -96,
+        -64
+      ],
+      "id": "f9935565-186e-4e2f-983e-31c78f48fdad",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst articles = items\n  .map(item => item.json)\n  .filter(article =>\n    article.title &&\n    article.link\n  );\n\nconst triggerInput =\n  $('When Executed by Another Workflow')\n    .first()\n    .json;\n\nconst ticker = String(\n  articles[0]?.ticker ??\n  triggerInput.ticker ??\n  ''\n)\n  .trim()\n  .toUpperCase();\n\nif (!ticker) {\n  throw new Error(\n    'Ticker is missing in Build News Payload'\n  );\n}\n\nconst companyName = String(\n  articles[0]?.companyName ??\n  ticker\n).trim();\n\nreturn [\n  {\n    json: {\n      ticker,\n      company_name: companyName,\n      article_count: articles.length,\n      news_articles: articles\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1504,
+        80
+      ],
+      "id": "916efbf6-c40b-4d61-ad2a-eca0ce327cb9",
+      "name": "Build News Payload"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        []
+      ]
+    },
+    "Input Ticker": {
+      "main": [
+        []
+      ]
+    },
+    "Prepare Company Search": {
+      "main": [
+        [
+          {
+            "node": "Get Marketaux News",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Finnhub News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Marketaux News": {
+      "main": [
+        [
+          {
+            "node": "Split Out Marketaux Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out Marketaux Data": {
+      "main": [
+        [
+          {
+            "node": "Filter and Normalize Marketaux News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Finnhub News": {
+      "main": [
+        [
+          {
+            "node": "Filter Normalize and Limit Finnhub News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter and Normalize Marketaux News": {
+      "main": [
+        [
+          {
+            "node": "Merge Financial News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Normalize and Limit Finnhub News": {
+      "main": [
+        [
+          {
+            "node": "Merge Financial News",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Financial News": {
+      "main": [
+        [
+          {
+            "node": "Deduplicate and Limit News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Prepare Company Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicate and Limit News": {
+      "main": [
+        [
+          {
+            "node": "Build News Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "89a19769-8b2b-4aca-a47b-21595aeb26c4",
+  "meta": {
+    "instanceId": "9ab1c320b82bc33b8fae8fcfcd3f9b34ecbc8e31930926afa7a2964d5374d7dd"
+  },
+  "id": "ZL1aFaKdjuIKdCjR",
+  "tags": []
+}

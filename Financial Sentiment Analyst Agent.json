@@ -1,0 +1,126 @@
+{
+  "name": "Financial Sentiment Analyst Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a financial sentiment analyst.\n\nAnalyze all supplied official SEC filings together.\n\nFirst:\n- Extract the key reported financial results\n- Identify growth drivers\n- Identify risks, adverse trends, regulatory issues, guidance, management changes, dividends and share repurchases\n- Distinguish reported facts from management expectations\n\nThen determine the overall financial sentiment toward the company.\n\nTicker:\n{{$json.ticker}}\n\nSEC filings:\n{{$json.documents_text}}\n\nUse exactly one sentiment label:\n- Strong Positive\n- Positive\n- Neutral\n- Negative\n- Strong Negative\n\nReturn only structured JSON.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are a careful financial sentiment analyst.\n\nYour job is to analyze multiple official SEC filings and financial disclosures about a public company and classify the overall sentiment toward the stock.\n\nUse exactly one of the following sentiment labels:\n- Strong Positive\n- Positive\n- Neutral\n- Negative\n- Strong Negative\n\nGuidelines:\n1. Consider all articles together, not only one article.\n2. Give more weight to material financial events such as earnings, revenue, guidance, regulation, lawsuits, product demand, analyst upgrades/downgrades, layoffs, debt, and market risks.\n3. If the news is mostly positive but includes some risks, choose Positive rather than Strong Positive.\n4. If the news is mixed or uncertain, choose Neutral.\n5. If there are serious risks, weak earnings, lawsuits, regulatory problems, or falling demand, choose Negative or Strong Negative depending on severity.\n6. Do not give investment advice.\n7. Do not recommend buying, selling, or holding the stock.\n8. Your answer must be valid JSON only.\n9. Do not include markdown.\n10. Do not include text outside the JSON.\n\nThe JSON must have this structure:\n{\n  \"ticker\": \"string\",\n  \"sentiment\": \"Strong Positive | Positive | Neutral | Negative | Strong Negative\",\n  \"confidence\": \"High | Medium | Low\",\n  \"main_reasons\": [\n    \"reason 1\",\n    \"reason 2\",\n    \"reason 3\"\n  ],\n  \"positive_signals\": [\n    \"positive signal 1\"\n  ],\n  \"negative_signals\": [\n    \"negative signal 1\"\n  ],\n  \"uncertainty_factors\": [\n    \"uncertainty factor 1\"\n  ],\n  \"summary\": \"short explanation of the overall sentiment\"\n}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        416,
+        0
+      ],
+      "id": "76fc27e9-faef-4e8a-a70d-edff68ebca28",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        384,
+        304
+      ],
+      "id": "4d6126f6-fcaf-4032-860a-d868a8933109",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "43NWnsv4sZF8uqtE",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"ticker\": {\n      \"type\": \"string\"\n    },\n    \"sentiment\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"Strong Positive\",\n        \"Positive\",\n        \"Neutral\",\n        \"Negative\",\n        \"Strong Negative\"\n      ]\n    },\n    \"confidence\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"High\",\n        \"Medium\",\n        \"Low\"\n      ]\n    },\n    \"main_reasons\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    },\n    \"positive_signals\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    },\n    \"negative_signals\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    },\n    \"uncertainty_factors\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    },\n    \"summary\": {\n      \"type\": \"string\"\n    }\n  },\n  \"required\": [\n    \"ticker\",\n    \"sentiment\",\n    \"confidence\",\n    \"main_reasons\",\n    \"positive_signals\",\n    \"negative_signals\",\n    \"uncertainty_factors\",\n    \"summary\"\n  ]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        592,
+        208
+      ],
+      "id": "fd96792e-62a9-43cb-bdfc-fa258d9761be",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        144,
+        0
+      ],
+      "id": "c6ac520b-6010-469e-89de-e8d01b99e75a",
+      "name": "When Executed by Another Workflow"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        []
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "saveExecutionProgress": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "121c67ac-99fd-42d2-80e7-b237a2557f29",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9ab1c320b82bc33b8fae8fcfcd3f9b34ecbc8e31930926afa7a2964d5374d7dd"
+  },
+  "id": "l0EMTeTMuP8N7JSP",
+  "tags": []
+}
