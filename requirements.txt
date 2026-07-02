@@ -1,0 +1,41 @@
+# Runtime requirements for the n8n financial sentiment project
+
+#
+
+# This project is based on n8n workflows and does not require
+
+# Python packages.
+
+#
+
+# Required software:
+
+# - Node.js >= 18
+
+# - npm
+
+# - n8n
+
+#
+
+# Install n8n globally with:
+
+# npm install -g n8n
+
+#
+
+# External services:
+
+# - Google Gemini API
+
+# - Marketaux API
+
+# - Finnhub API
+
+# - SEC EDGAR
+
+#
+
+# No private API keys should be stored in this file.
+
+n8n==2.8.4
