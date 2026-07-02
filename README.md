@@ -106,7 +106,6 @@ The generated report includes:
 
 ## Notes
 
-* Works best with: AAPL, TSLA, NVDA, MSFT, AMZN, GOOGL, META
 * Requires external API keys (not included in the repository)
 * Sensitive data such as API keys should never be committed
 
